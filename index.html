@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body { margin: 0; font: 14px system-ui, sans-serif; } img { max-width: 100%; }</style>
+<title>SET100 MA6 Scan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap">
+<style>
+/* Layout: signal list as a narrow ledger on the left, one large chart on the right; stacks on phones. */
+:root {
+  --bg: #f4f6f8; --surface: #ffffff; --ink: #172033; --muted: #5d6a7d; --line: #dde3ea;
+  --accent: #2f5d8a; --dip: #0f8a5f; --rich: #c2410c; --ma: #b7791f; --band: #7b8aa0;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e141d; --surface: #151d29; --ink: #e5eaf1; --muted: #93a0b3; --line: #253042;
+  --accent: #7fa8d6; --dip: #3fc08d; --rich: #f07a45; --ma: #e0a84a; --band: #8494ab; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e141d; --surface: #151d29; --ink: #e5eaf1; --muted: #93a0b3; --line: #253042;
+  --accent: #7fa8d6; --dip: #3fc08d; --rich: #f07a45; --ma: #e0a84a; --band: #8494ab; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+.stamp { color: var(--muted); font-size: 0.85rem; font-family: var(--mono); }
+.counts { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { font-family: var(--mono); font-size: 0.78rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.pill.dip { color: var(--dip); } .pill.rich { color: var(--rich); }
+.main { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 760px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.group h2 { margin: 0; padding: 10px 14px 6px; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.group.dip h2 { color: var(--dip); } .group.rich h2 { color: var(--rich); }
+.group + .group { border-top: 1px solid var(--line); }
+button.row { all: unset; box-sizing: border-box; width: 100%; cursor: pointer; display: grid;
+  grid-template-columns: 1fr auto auto; gap: 2px 12px; padding: 8px 14px; border-left: 3px solid transparent; }
+button.row:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+button.row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+button.row[aria-current="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); border-left-color: var(--accent); }
+.sym { font-weight: 700; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; font-size: 0.9rem; }
+.dev.dip { color: var(--dip); font-weight: 600; } .dev.rich { color: var(--rich); font-weight: 600; }
+.tags { grid-column: 1 / -1; font-size: 0.75rem; color: var(--muted); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; display: grid; gap: 10px; }
+.panel-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.panel-head .big { font-size: 1.25rem; font-weight: 700; }
+.legend { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 14px; font-variant-numeric: tabular-nums; }
+.legend b { color: var(--ink); font-weight: 600; }
+.key { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 4px; }
+#chart { height: 440px; width: 100%; }
+@media (max-width: 760px) { #chart { height: 340px; } }
+.note { font-size: 0.78rem; color: var(--muted); line-height: 1.5; max-width: 70ch; }
+.empty { padding: 28px 16px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="title">SET100 MA6 scan</h1>
+      <div class="stamp" id="stamp"></div>
+    </div>
+    <div class="counts" id="counts"></div>
+  </header>
+  <div class="main">
+    <nav class="list" id="list" aria-label="Signal stocks"></nav>
+    <section class="panel" aria-live="polite">
+      <div class="panel-head"><span class="big" id="sym">-</span><span class="stamp" id="symInfo"></span></div>
+      <div class="legend" id="legend"></div>
+      <div id="chart"></div>
+      <p class="note" id="note"></p>
+    </section>
+  </div>
+</div>
+
+<script type="application/json" id="scan-data">null</script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(function () {
+  const inline = JSON.parse(document.getElementById('scan-data').textContent);
+  if (inline) start(inline);
+  else fetch('data.json?t=' + Date.now(), { cache: 'no-store' })   // ?t= also skips the CDN cache
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(start)
+    .catch(() => { document.getElementById('stamp').textContent = 'Scan data could not be loaded. Reload the page.'; });
+
+  function start(D) {
+  const $ = (id) => document.getElementById(id);
+  const fmt = (x) => x == null ? '-' : (x < 100 ? x.toFixed(2) : x.toFixed(1));
+  $('title').textContent = D.title;
+  $('stamp').textContent = 'Scanned ' + D.sub;
+  const dips = D.rows.filter(r => r.side === 'DIP'), rich = D.rows.filter(r => r.side === 'RICH');
+  $('counts').innerHTML = '<span class="pill dip">' + dips.length + ' below MA6</span><span class="pill rich">' + rich.length + ' above MA6</span>';
+  $('note').textContent = 'MA6 = 6-day simple average of the close. Bands: ' + D.tma + '. ' +
+    'The TMA is centered, so past band values redraw as new bars arrive (same as TradingView); only the latest bar is what a live scan sees. ' +
+    'Arrow = today\'s signal bar. Daily bars from the NAS price DB; SET holiday duplicates removed.';
+
+  const list = $('list');
+  if (!D.rows.length) {
+    list.innerHTML = '<div class="empty">No SET100 stock is ' + D.devPct + '% or more away from its MA6 in this scan.</div>';
+  }
+  [['DIP', 'Below MA6 ≥' + D.devPct + '%', dips, 'dip'], ['RICH', 'Above MA6 ≥' + D.devPct + '%', rich, 'rich']].forEach(([side, label, rows, cls]) => {
+    if (!rows.length) return;
+    const g = document.createElement('div'); g.className = 'group ' + cls;
+    const h = document.createElement('h2'); h.textContent = label + ' (' + rows.length + ')'; g.appendChild(h);
+    rows.forEach(r => {
+      const b = document.createElement('button'); b.className = 'row'; b.type = 'button'; b.dataset.sym = r.symbol;
+      b.innerHTML = '<span class="sym"></span><span class="num"></span><span class="num dev ' + cls + '"></span>';
+      b.children[0].textContent = r.symbol;
+      b.children[1].textContent = fmt(r.close);
+      b.children[2].textContent = (r.dev > 0 ? '+' : '') + r.dev.toFixed(1) + '%';
+      if (r.tags) { const t = document.createElement('span'); t.className = 'tags'; t.textContent = r.tags; b.appendChild(t); }
+      b.addEventListener('click', () => select(r.symbol, true));
+      g.appendChild(b);
+    });
+    list.appendChild(g);
+  });
+
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  let chart = null, series = {};
+  function themeOpts() {
+    return { layout: { background: { type: 'solid', color: css('--surface') }, textColor: css('--muted'), fontFamily: css('--mono') },
+      grid: { vertLines: { color: css('--line') }, horzLines: { color: css('--line') } },
+      rightPriceScale: { borderColor: css('--line') }, timeScale: { borderColor: css('--line') },
+      crosshair: { mode: 0 } };
+  }
+  function build() {
+    if (!window.LightweightCharts) { $('chart').textContent = 'Chart library did not load.'; return false; }
+    chart = LightweightCharts.createChart($('chart'), Object.assign({ autoSize: true }, themeOpts()));
+    series.candle = chart.addCandlestickSeries({ upColor: css('--dip'), downColor: css('--rich'), borderVisible: false,
+      wickUpColor: css('--dip'), wickDownColor: css('--rich') });
+    series.upper = chart.addLineSeries({ color: css('--band'), lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+    series.mid = chart.addLineSeries({ color: css('--band'), lineWidth: 1, lineStyle: 1, priceLineVisible: false, lastValueVisible: false });
+    series.lower = chart.addLineSeries({ color: css('--band'), lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+    series.ma = chart.addLineSeries({ color: css('--ma'), lineWidth: 2, priceLineVisible: false });
+    chart.subscribeCrosshairMove(p => legend(p && p.time));
+    // autoSize learns the width asynchronously: fit the bars once the box has a size, and on every resize,
+    // otherwise a range set at width 0 squeezes all candles against the right edge.
+    try { new ResizeObserver(() => requestAnimationFrame(fit)).observe($('chart')); } catch (e) {}
+    return true;
+  }
+  function fit() { if (chart && $('chart').clientWidth > 0) chart.timeScale().fitContent(); }
+  let cur = null;
+  function line(c, key) { return c.time.map((t, i) => c[key][i] == null ? null : { time: t, value: c[key][i] }).filter(Boolean); }
+  function legend(time) {
+    if (!cur) return;
+    const c = D.charts[cur.symbol]; let i = time ? c.time.indexOf(time) : c.time.length - 1; if (i < 0) i = c.time.length - 1;
+    $('legend').innerHTML =
+      '<span>' + c.time[i] + '</span><span>O <b>' + fmt(c.open[i]) + '</b> H <b>' + fmt(c.high[i]) + '</b> L <b>' + fmt(c.low[i]) + '</b> C <b>' + fmt(c.close[i]) + '</b></span>' +
+      '<span><i class="key" style="border-color:var(--ma)"></i>MA6 <b>' + fmt(c.ma6[i]) + '</b></span>' +
+      '<span><i class="key" style="border-color:var(--band);border-top-style:dashed"></i>TMA ' + fmt(c.tma_lower[i]) + ' / ' + fmt(c.tma_mid[i]) + ' / ' + fmt(c.tma_upper[i]) + '</span>';
+  }
+  function select(sym, fromClick) {
+    const r = D.rows.find(x => x.symbol === sym) || D.rows[0]; if (!r) return;
+    cur = r;
+    document.querySelectorAll('button.row').forEach(b => b.setAttribute('aria-current', String(b.dataset.sym === r.symbol)));
+    $('sym').textContent = r.symbol;
+    $('symInfo').textContent = fmt(r.close) + ' · ' + (r.dev > 0 ? '+' : '') + r.dev.toFixed(1) + '% vs MA6 ' + fmt(r.ma6) + (r.tags ? ' · ' + r.tags : '');
+    try { if (fromClick) history.replaceState(null, '', '#' + r.symbol); } catch (e) {}
+    if (!chart && !build()) return;
+    const c = D.charts[r.symbol];
+    series.candle.setData(c.time.map((t, i) => ({ time: t, open: c.open[i], high: c.high[i], low: c.low[i], close: c.close[i] })));
+    series.ma.setData(line(c, 'ma6'));
+    series.upper.setData(line(c, 'tma_upper')); series.mid.setData(line(c, 'tma_mid')); series.lower.setData(line(c, 'tma_lower'));
+    const last = c.time[c.time.length - 1], dip = r.side === 'DIP';
+    series.candle.setMarkers([{ time: last, position: dip ? 'belowBar' : 'aboveBar', shape: dip ? 'arrowUp' : 'arrowDown',
+      color: css(dip ? '--dip' : '--rich'), text: (r.dev > 0 ? '+' : '') + r.dev.toFixed(1) + '% vs MA6' }]);
+    fit();
+    requestAnimationFrame(fit);
+    legend(null);
+  }
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const retheme = () => {
+    if (!chart) return;
+    chart.applyOptions(themeOpts());
+    series.candle.applyOptions({ upColor: css('--dip'), downColor: css('--rich'), wickUpColor: css('--dip'), wickDownColor: css('--rich') });
+    ['upper', 'mid', 'lower'].forEach(k => series[k].applyOptions({ color: css('--band') }));
+    series.ma.applyOptions({ color: css('--ma') });
+    if (cur) select(cur.symbol, false);
+  };
+  try { mq.addEventListener('change', retheme); } catch (e) {}
+  new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  const want = (location.hash || '').slice(1).toUpperCase();
+  if (D.rows.length) select(D.rows.some(r => r.symbol === want) ? want : D.rows[0].symbol, false);
+  }
+})();
+</script>
+
+</html>
