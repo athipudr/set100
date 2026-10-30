@@ -93,20 +93,28 @@ button.row[aria-current="true"] { background: color-mix(in srgb, var(--accent) 1
   function start(D) {
   const $ = (id) => document.getElementById(id);
   const fmt = (x) => x == null ? '-' : (x < 100 ? x.toFixed(2) : x.toFixed(1));
+  const pct = (r) => (r.dev > 0 ? '+' : '') + r.dev.toFixed(r.th < 1 ? 2 : 1) + '%';   // 2 dp for the 0.75% S50 rows
   $('title').textContent = D.title;
   $('stamp').textContent = 'Scanned ' + D.sub;
   const dips = D.rows.filter(r => r.side === 'DIP'), rich = D.rows.filter(r => r.side === 'RICH');
   $('counts').innerHTML = '<span class="pill dip">' + dips.length + ' below MA6</span><span class="pill rich">' + rich.length + ' above MA6</span>';
   $('note').textContent = 'MA6 = 6-day simple average of the close. Bands: ' + D.tma + '. ' +
     'The TMA is centered, so past band values redraw as new bars arrive (same as TradingView); only the latest bar is what a live scan sees. ' +
-    'Arrow = today\'s signal bar. Daily bars from the NAS price DB; SET holiday duplicates removed.';
+    'Arrow = the signal bar. Stocks: daily bars from the NAS price DB, SET holiday duplicates removed. ' +
+    'SET50 futures: front-month contract on 2-hour bars from 09:00 (MA6 = 6 bars = about 1.5 trading days), Bangkok time.';
 
   const list = $('list');
   if (!D.rows.length) {
     list.innerHTML = '<div class="empty">No SET100 stock is ' + D.devPct + '% or more away from its MA6 in this scan.</div>';
   }
-  [['DIP', 'Below MA6 ≥' + D.devPct + '%', dips, 'dip'], ['RICH', 'Above MA6 ≥' + D.devPct + '%', rich, 'rich']].forEach(([side, label, rows, cls]) => {
-    if (!rows.length) return;
+  const groups = [];   // rows arrive ordered by group then side: one list section per (group, side)
+  D.rows.forEach(r => {
+    const g = groups[groups.length - 1];
+    if (g && g.group === r.group && g.side === r.side) g.rows.push(r); else groups.push({ group: r.group, side: r.side, th: r.th, rows: [r] });
+  });
+  groups.forEach(({ group, side, th, rows }) => {
+    const cls = side === 'DIP' ? 'dip' : 'rich';
+    const label = (group === 'SET100' ? '' : 'SET50 futures 2H · ') + (side === 'DIP' ? 'Below' : 'Above') + ' MA6 ≥' + th + '%';
     const g = document.createElement('div'); g.className = 'group ' + cls;
     const h = document.createElement('h2'); h.textContent = label + ' (' + rows.length + ')'; g.appendChild(h);
     rows.forEach(r => {
@@ -114,7 +122,7 @@ button.row[aria-current="true"] { background: color-mix(in srgb, var(--accent) 1
       b.innerHTML = '<span class="sym"></span><span class="num"></span><span class="num dev ' + cls + '"></span>';
       b.children[0].textContent = r.symbol;
       b.children[1].textContent = fmt(r.close);
-      b.children[2].textContent = (r.dev > 0 ? '+' : '') + r.dev.toFixed(1) + '%';
+      b.children[2].textContent = pct(r);
       if (r.tags) { const t = document.createElement('span'); t.className = 'tags'; t.textContent = r.tags; b.appendChild(t); }
       b.addEventListener('click', () => select(r.symbol, true));
       g.appendChild(b);
@@ -148,11 +156,12 @@ button.row[aria-current="true"] { background: color-mix(in srgb, var(--accent) 1
   function fit() { if (chart && $('chart').clientWidth > 0) chart.timeScale().fitContent(); }
   let cur = null;
   function line(c, key) { return c.time.map((t, i) => c[key][i] == null ? null : { time: t, value: c[key][i] }).filter(Boolean); }
+  const when = (t) => typeof t === 'number' ? new Date(t * 1000).toISOString().slice(0, 16).replace('T', ' ') : t;
   function legend(time) {
     if (!cur) return;
     const c = D.charts[cur.symbol]; let i = time ? c.time.indexOf(time) : c.time.length - 1; if (i < 0) i = c.time.length - 1;
     $('legend').innerHTML =
-      '<span>' + c.time[i] + '</span><span>O <b>' + fmt(c.open[i]) + '</b> H <b>' + fmt(c.high[i]) + '</b> L <b>' + fmt(c.low[i]) + '</b> C <b>' + fmt(c.close[i]) + '</b></span>' +
+      '<span>' + when(c.time[i]) + '</span><span>O <b>' + fmt(c.open[i]) + '</b> H <b>' + fmt(c.high[i]) + '</b> L <b>' + fmt(c.low[i]) + '</b> C <b>' + fmt(c.close[i]) + '</b></span>' +
       '<span><i class="key" style="border-color:var(--ma)"></i>MA6 <b>' + fmt(c.ma6[i]) + '</b></span>' +
       '<span><i class="key" style="border-color:var(--band);border-top-style:dashed"></i>TMA ' + fmt(c.tma_lower[i]) + ' / ' + fmt(c.tma_mid[i]) + ' / ' + fmt(c.tma_upper[i]) + '</span>';
   }
@@ -161,16 +170,17 @@ button.row[aria-current="true"] { background: color-mix(in srgb, var(--accent) 1
     cur = r;
     document.querySelectorAll('button.row').forEach(b => b.setAttribute('aria-current', String(b.dataset.sym === r.symbol)));
     $('sym').textContent = r.symbol;
-    $('symInfo').textContent = fmt(r.close) + ' · ' + (r.dev > 0 ? '+' : '') + r.dev.toFixed(1) + '% vs MA6 ' + fmt(r.ma6) + (r.tags ? ' · ' + r.tags : '');
+    $('symInfo').textContent = fmt(r.close) + ' · ' + pct(r) + ' vs MA6 ' + fmt(r.ma6) + (r.tags ? ' · ' + r.tags : '');
     try { if (fromClick) history.replaceState(null, '', '#' + r.symbol); } catch (e) {}
     if (!chart && !build()) return;
     const c = D.charts[r.symbol];
+    chart.applyOptions({ timeScale: { timeVisible: typeof c.time[0] === 'number', secondsVisible: false } });   // 2H bars
     series.candle.setData(c.time.map((t, i) => ({ time: t, open: c.open[i], high: c.high[i], low: c.low[i], close: c.close[i] })));
     series.ma.setData(line(c, 'ma6'));
     series.upper.setData(line(c, 'tma_upper')); series.mid.setData(line(c, 'tma_mid')); series.lower.setData(line(c, 'tma_lower'));
     const last = c.time[c.time.length - 1], dip = r.side === 'DIP';
     series.candle.setMarkers([{ time: last, position: dip ? 'belowBar' : 'aboveBar', shape: dip ? 'arrowUp' : 'arrowDown',
-      color: css(dip ? '--dip' : '--rich'), text: (r.dev > 0 ? '+' : '') + r.dev.toFixed(1) + '% vs MA6' }]);
+      color: css(dip ? '--dip' : '--rich'), text: pct(r) + ' vs MA6' }]);
     fit();
     requestAnimationFrame(fit);
     legend(null);
